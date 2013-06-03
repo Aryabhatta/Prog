@@ -5,8 +5,10 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#define VERBOSE 1
+
 #define NUMTHREADS 5  // Num of threads available
-#define ArraySz    11  // Size of array to sort
+#define ArraySz    7  // Size of array to sort
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -29,18 +31,21 @@ void * doWork( void * ptr )
 {
     struct pthread_args * arg = ptr;
     unsigned short int xsubi [3] = {3, 7 , 11}; 
+
 do{
+
     // check if there's any task
     if( *(arg->numtask) == 0 )
     {
         // Sleep random time
         double sleep_time = 1.0 + erand48 ( xsubi ) ;
         usleep(1000000 * sleep_time ) ;
-       printf("\n Thread %d slept for %lf seconds",arg->id, 1000000*sleep_time);
+        printf("\n Thread %d slept for %lf seconds",arg->id, 1000000*sleep_time);
 
+#if VERBOSE
         // Be a producer
         printf("\nThread %d is producer", arg->id);
-
+#endif
         pthread_mutex_lock(&mutex);
 
         int left = 0;
@@ -69,10 +74,6 @@ do{
 	      }
 	      swap(arg->a + swapIdx, arg->a + right);
 
-	     // quicksort(a, left, swapIdx - 1);
-	     // quicksort(a, swapIdx + 1, right);
-
-//       printf("\nNumtask = %d, left=%d, right=%d",*(arg->numtask), left, right);
         int cntr=*(arg->numtask)*2;
 
         // create tasks only if necessary
@@ -82,7 +83,9 @@ do{
             arg->work[cntr++] = left;
             arg->work[cntr++] = swapIdx-1;
             *(arg->numtask)= *(arg->numtask) + 1;
+#if VERBOSE
             printf("\nThread %d created task %d-%d", arg->id, left, swapIdx-1);
+#endif
         }
         if(right > swapIdx+1)
         {
@@ -90,17 +93,14 @@ do{
             arg->work[cntr++] = swapIdx+1;
             arg->work[cntr++] =right ;
             *(arg->numtask)= *(arg->numtask) + 1;
+#if VERBOSE
             printf("\nThread %d created task %d-%d", arg->id, swapIdx+1, right);
+#endif
         }
-        /*
-        // Insert task in task array
-        arg->work[cntr++] = left;
-        arg->work[cntr++] = swapIdx-1;
-        arg->work[cntr++] = swapIdx+1;
-        arg->work[cntr++] =right ;
-        *(arg->numtask)= *(arg->numtask) + 2;*/
 
-        printf("\n Pivot is %d", pivotVal);
+#if VERBOSE
+        printf("\nPivot is %d", pivotVal);
+#endif
 	    }
         pthread_mutex_unlock(&mutex);
     }
@@ -108,14 +108,21 @@ do{
     {
         pthread_mutex_lock(&mutex);
 
+#if VERBOSE
         // Be a consumer
         printf("\nThread %d is consumer", arg->id);
+#endif
 
         // get the work
         int cntr=(*(arg->numtask)-1)*2;
         int left = arg->work[cntr++];
         int right = arg->work[cntr];
-        printf("\nnumtask=%d, Thread %d working on indices from %d to  %d",*(arg->numtask),arg->id,left,right);
+#if VERBOSE
+        printf("\nThread %d working on indices from %d to %d",arg->id,left,right);
+#endif
+        // change #tasks
+        *(arg->numtask)= *(arg->numtask) - 1;
+//        pthread_mutex_unlock(&mutex);     // mutex unlocked before doin work
 
         // do the work
         // do sorting
@@ -140,14 +147,10 @@ do{
 		      }
 	      }
 	      swap(arg->a + swapIdx, arg->a + right); // swaping done
+        
 
-	     // quicksort(a, left, swapIdx - 1);
-	     // quicksort(a, swapIdx + 1, right);
-
-        // change #tasks
-        *(arg->numtask)= *(arg->numtask) - 1;
-
-  //     printf("\nNumtask = %d, left=%d, right=%d",*(arg->numtask), left, right);
+        // Mutex gained before putting work
+  //       pthread_mutex_lock(&mutex);
          cntr=*(arg->numtask)*2;
 
         // create tasks only if necessary
@@ -157,7 +160,9 @@ do{
             arg->work[cntr++] = left;
             arg->work[cntr++] = swapIdx-1;
             *(arg->numtask)= *(arg->numtask) + 1;
+#if VERBOSE
             printf("\nThread %d created task %d-%d", arg->id, left, swapIdx-1);
+#endif
         }
         if(right > swapIdx+1)
         {
@@ -165,16 +170,19 @@ do{
             arg->work[cntr++] = swapIdx+1;
             arg->work[cntr++] =right ;
             *(arg->numtask)= *(arg->numtask) + 1;
+#if VERBOSE
             printf("\nThread %d created task %d-%d", arg->id, swapIdx+1, right);
+#endif
         }
 
-        printf("\n Pivot is %d", pivotVal);
-      }
-
+#if VERBOSE
+        printf("\nPivot is %d", pivotVal);
+#endif    
         pthread_mutex_unlock(&mutex);     
+      }
     }
 }while( *(arg->numtask) > 0);
-    // how to stop ?
+
     return 0;
 }
 
@@ -277,11 +285,12 @@ int main(int argc, char **argv)
 	struct timespec start, stop;
 
     int numtask=0;        // no of tasks
-    int work[ArraySz*2]; // max size
+    int work[ArraySz/2]; // max size
 
     // Created random array
 	int *a = random_int_array(elements, elements/2, 13);
 
+    printf("\nArray before Sorting:\n");
     // Print array
 	print_array(a, elements);
 
@@ -311,19 +320,18 @@ int main(int argc, char **argv)
 
 	clock_gettime(CLOCK_MONOTONIC, &stop);
 
-    // print numtask
-    printf("\nNumTask = %d", numtask);
-
-
+#if VERBOSE
     // print workarray
-    for( int i=0; i< ArraySz*2; i++)
+    for( int i=0; i< ArraySz/2; i++)
     {
         printf("\nwork[%d]=%d\t", i,work[i]);
         i++;
         printf("work[%d]=%d", i,work[i]);
     }
     printf("\n\n");
+#endif
 
+    printf("\nArray after Sorting:\n");
 	print_array(a, elements);
 
 	printf("\nTime = %lf\n", time_diff(&start, &stop, NULL));
